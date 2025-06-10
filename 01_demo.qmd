@@ -1,7 +1,7 @@
 ---
 title: "tidysynthesis and syntheval demos"
 authors: "Aaron R. Williams and Jeremy Seeman"
-abstract: "This hands-on demonstration introduces the tidysynthesis and syntheval R packages for generating and evaluating synthetic data. The demo generates three synthetic version of ACS microdata. The first synthesis uses many default options. The second and third syntheses increase the amount of noise in the data to increase privacy protections."
+abstract: "This hands-on demonstration introduces the tidysynthesis and syntheval R packages for generating and evaluating synthetic data. During the course of the demo, we will generate and evaluate three synthetic versions of ACS microdata. The first synthesis will rely on defaults in tidysynthesis. The second and third syntheses increase the amount of noise in the synthetic data to increase privacy protections."
 institute: "Urban Institute"
 format: 
   html:
@@ -10,6 +10,24 @@ embed-resources: true
 editor_options: 
   chunk_output_type: console
 ---
+
+```{css}
+#| echo: false
+
+p {
+  margin-top: 30px;
+}
+
+p.author, p.affiliation {
+  margin-top: 0px;
+}
+
+h2 {
+  color: #1696d2
+}
+
+```
+
 
 ## Setup
 
@@ -54,10 +72,10 @@ glimpse(acs_conf_nw)
 A `roadmap` object contains information about the order of operations for a specific synthesis, which is required for all syntheses. You can create a roadmap S3 object using the function `roadmap()` that requires two arguments:
 
 - `conf_data`: A data frame with the confidential data used to generate the synthetic data. The resulting synthetic data will have the same number of columns as `conf_data`.
-- `start_data`: A data frame with a strict subset of variables from conf_data, which is used to start the synthesis process. The resulting synthetic data will have the same number of rows as `start_data`.
+- `start_data`: A data frame with a strict subset of variables from `conf_data`, which is used to start the synthesis process. The resulting synthetic data will have the same number of rows as `start_data`.
 :::
 
-We bootstrap sample the `county` variable 1,500 times to create our start data and then create a `roadmap`.
+We bootstrap sample the `county` variable 1,500 times to create our start data and then create a `roadmap` using the confidential data (`acs_conf_nw`) and the start data (`acs_start`).
 
 ```{r}
 acs_start <- acs_conf_nw |>
@@ -73,16 +91,39 @@ acs_roadmap1 <- roadmap(
 
 `roadmap()` creates defaults for the schema, visit sequence, replicates, and constraints. We will use the defaults (for now). 
 
+The `schema` object learns the types from the confidential data.
+
 ```{r}
 acs_roadmap1[["schema"]]
 
+```
+
+The visit sequence uses the variable order in the data excluding the variables in `start_data`. 
+
+```{r}
 acs_roadmap1[["visit_sequence"]]
 
+```
+
+The number of replicates defaults to 1. 
+
+```{r}
 acs_roadmap1[["replicates"]]
 
+```
+
+The synthesis doesn't use any constraints.
+
+```{r}
 acs_roadmap1[["constraints"]]
 
 ```
+
+::: {.callout-note}
+## Takeaway
+
+This default `roadmap` selects the variables we will synthesize and the order we will use to synthesize the data. 
+:::
 
 ## `synth_spec`
 
@@ -102,7 +143,7 @@ The `synth_spec` provides you flexibility to arbitrarily specify the details of 
 
 :::
 
-We will use regression trees and decision trees to model all of our variables. These tree-based models easily handle non-linear patterns and interactions in data. They are also easy to sample from, which will do using the built-in `sample_rpart()` function.[^decision-trees]
+We will use regression trees and decision trees to model all of our variables. These tree-based models easily handle non-linear patterns and interactions in data. They are also easy to sample from, which we will do using the built-in `sample_rpart()` function.[^decision-trees]
 
 [^decision-trees]: R2D3 has a visual explanation of decision trees: http://www.r2d3.us/visual-intro-to-machine-learning-part-1/
 
@@ -111,7 +152,7 @@ rpart_reg <- decision_tree() |>
   set_engine(engine = "rpart") |>
   set_mode(mode = "regression")
 
-rpart_class <- parsnip::decision_tree() |>
+rpart_class <- decision_tree() |>
   set_engine(engine = "rpart") |>
   set_mode(mode = "classification")
 
@@ -132,6 +173,12 @@ acs_synth_spec1 <- synth_spec(
 
 ```
 
+::: {.callout-note}
+## Takeaway
+
+This default simple `synth_spec` object maps models (decision trees and regression trees) and samplers (`sample_rpart`) to each of the variables in the visit sequence. We evaluated the quality of the synthetic data with comparisons of statistics on the confidential and synthetic data.
+:::
+
 ## `synthesize`
 
 We can combine the `roadmap` and `synth_spec` into a `presynth` object and generate synthetic data. Note: no serious computation happens until `synthesize()`. 
@@ -143,6 +190,13 @@ acs_presynth1 <- presynth(
 )
 
 acs_synth1 <- synthesize(acs_presynth1)
+
+```
+
+We can look at the synthetic data.
+
+```{r}
+glimpse(acs_synth1[["synthetic_data"]])
 
 ```
 
@@ -168,7 +222,40 @@ util_proportions(postsynth = acs_eval1, data = acs_conf_nw) |>
 util_moments(postsynth = acs_eval1, data = acs_conf_nw, na.rm = TRUE) |>
   filter(variable == "inctot")
 
+util_percentiles(postsynth = acs_eval1, data = acs_conf_nw, na.rm = TRUE) |>
+  filter(variable == "inctot")
+
 ```
+
+We can also look at multivariate utility metrics. We can look at correlation matrices.
+
+```{r}
+plot_cormat(synth_data = acs_eval1, conf_data = acs_conf_nw)
+
+```
+
+We can compare linear regression models fit on both data sets. 
+
+```{r}
+ci_overlap <- util_ci_overlap(postsynth = acs_eval1, data = acs_conf_nw, formula = inctot ~ age)
+
+ci_overlap
+
+ci_overlap$coefficient |>
+  ggplot(aes(x = estimate, xmin = conf.low, xmax = conf.high, y = term, color = source)) +
+  geom_pointrange(alpha = 0.5, position = position_dodge(width = 0.5)) +
+  labs(
+    title = "The Synthesizer Recreates the Point Estimates and Confidence Intervals",
+    subtitle = "Regression Confidence Interval Overlap"
+  )
+
+```
+
+::: {.callout-note}
+## Takeaway
+
+We created a simple `roadmap` and a simple `synth_spec`. We combined both object into a `presynth` and generated a synthetic data set.
+:::
 
 ## Approach 2
 
@@ -178,7 +265,11 @@ Let's build a new synthesis that:
 2. Adds logical constraints that must hold in the synthetic data.
 3. Adds additional noise to the synthetic data.
 
-We create a new visit sequence that orders categorical variables from highest to lowest entropy and numeric variables from most to least correlated with the variable `age`. We'll start with `acs_roadmap1` and update it to create `acs_roadmap2`. 
+### Visit Sequence
+
+We create a new visit sequence that orders categorical variables from highest to lowest entropy and numeric variables from most to least correlated with the variable `age`. 
+
+We'll start with `acs_roadmap1` and update it to create `acs_roadmap2`. 
 
 ```{r}
 acs_roadmap2 <- acs_roadmap1 |>
@@ -189,7 +280,9 @@ acs_roadmap2[["visit_sequence"]]
 
 ```
 
-We add an unconditional non-negativity constraint for `age` and a condition constraint for `inctot`. We can add as many numeric constraints as we want with minima, maxima, and conditions by creating a data frame. We then add these constraints to the `roadmap`.
+### Constraints
+
+We add an unconditional non-negativity constraint for `age` and a conditional constraint for `inctot`. We can add as many numeric constraints as we want with minima, maxima, and conditions by creating a data frame. We then add these constraints to the `roadmap`.
 
 ```{r}
 ex_acs_constraints_numeric <- tibble::tribble(
@@ -209,6 +302,8 @@ acs_roadmap2 <- acs_roadmap2 |>
   )
 
 ```
+
+### Noise
 
 To increase privacy protection, we add extra noise to the synthesis process using a uniform distribution for classification models and a Gaussian distribution for numeric variables. 
 
@@ -257,10 +352,28 @@ acs_presynth2 <- presynth(
 
 acs_synth2 <- synthesize(acs_presynth2)
 
+```
+
+We can look at the synthetic data.
+
+```{r}
+glimpse(acs_synth2[["synthetic_data"]])
+
+```
+
+Finally, we clean up our `NA` values.
+
+```{r}
 acs_eval2 <- acs_synth2[["synthetic_data"]] |>
   collapse_na()
 
 ```
+
+::: {.callout-note}
+## Takeaway
+
+We generated a second synthesis. This synthesis uses a data-informed visit sequence, implemented two constraints, and added additional noise to model-generated values.
+:::
 
 ## Approach 3
 
@@ -311,6 +424,18 @@ acs_presynth3 <- presynth(
 
 acs_synth3 <- synthesize(acs_presynth3)
 
+```
+
+We can look at the synthetic data.
+
+```{r}
+glimpse(acs_synth3[["synthetic_data"]])
+
+```
+
+Finally, we clean up the `NA` values.
+
+```{r}
 acs_eval3 <- acs_synth3[["synthetic_data"]] |>
   collapse_na()
 
@@ -349,3 +474,7 @@ bind_rows(
   facet_wrap(~ Source)
 
 ```
+
+::: {.callout-note}
+We generated three synthetic data sets. With each data set, we increased the amount of noise added to model-generated values. This extra noise increased privacy (not demonstrated) but reduced the data quality by reducing how much the synthesizer could learn from the confidential data. 
+:::
