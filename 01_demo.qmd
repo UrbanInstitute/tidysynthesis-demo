@@ -46,7 +46,7 @@ options(scipen = 999)
 
 ```
 
-We want our randomization to be reproducible, so we set a seed. 
+We set the seed to make the entire process, which is random, reproducible.
 
 ```{r}
 set.seed(1)
