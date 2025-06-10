@@ -2,7 +2,7 @@
 
 Aaron R. Williams and Jeremy Seeman
 
-This brief demonstration introduces the [tidysynthesis](https://github.com/UrbanInstitute/tidysynthesis) and [syntheval](https://github.com/UrbanInstitute/syntheval) R packages for generating and evaluating synthetic data.
+This brief demonstration introduces the [tidysynthesis](https://github.com/UrbanInstitute/tidysynthesis) and [syntheval](https://github.com/UrbanInstitute/syntheval) R packages for generating and evaluating synthetic data. The [tidysynthesis documentation website](https://ui-research.github.io/tidysynthesis-documentation/) contains additional information.
 
 ### Download Instructions
 
